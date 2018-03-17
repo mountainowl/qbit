@@ -225,7 +225,7 @@ public class BaseServiceQueueImpl implements ServiceQueue {
         //inputQueueListener.receive(methodCall);
         final boolean continueFlag[] = new boolean[1];
         methodCall = beforeMethodProcessing(methodCall, continueFlag);
-        if (continueFlag[0]) {
+        if (!continueFlag[0]) {
             if (debug) logger.debug("ServiceImpl::doHandleMethodCall() before handling stopped processing");
             return false;
         }
@@ -509,7 +509,7 @@ public class BaseServiceQueueImpl implements ServiceQueue {
     }
 
     private void handleEvents(ReceiveQueue<Event<Object>> eventReceiveQueue, ServiceMethodHandler serviceMethodHandler) {
-    /* Handles the event processing. */
+        /* Handles the event processing. */
         Event<Object> event = eventReceiveQueue.poll();
         while (event != null) {
             serviceMethodHandler.handleEvent(event);
@@ -550,18 +550,23 @@ public class BaseServiceQueueImpl implements ServiceQueue {
     }
 
     private MethodCall<Object> beforeMethodProcessing(MethodCall<Object> methodCall, boolean[] continueFlag) {
-        if (!beforeMethodCall.before(methodCall)) {
+        if (beforeMethodCall.before(methodCall)) {
+            continueFlag[0] = true;
+
+            if (requestObjectTransformer != null && requestObjectTransformer != ServiceConstants.NO_OP_ARG_TRANSFORM) {
+                final Object arg = requestObjectTransformer.transform(methodCall);
+                methodCall = MethodCallBuilder.transformed(methodCall, arg);
+            }
+
+            if (beforeMethodCallAfterTransform != null && beforeMethodCallAfterTransform != ServiceConstants.NO_OP_BEFORE_METHOD_CALL) {
+                if (!beforeMethodCallAfterTransform.before(methodCall)) {
+                    continueFlag[0] = false;
+                }
+            }
+        } else {
             continueFlag[0] = false;
         }
-        if (requestObjectTransformer != null && requestObjectTransformer != ServiceConstants.NO_OP_ARG_TRANSFORM) {
-            final Object arg = requestObjectTransformer.transform(methodCall);
-            methodCall = MethodCallBuilder.transformed(methodCall, arg);
-        }
-        if (beforeMethodCallAfterTransform != null && beforeMethodCallAfterTransform != ServiceConstants.NO_OP_BEFORE_METHOD_CALL) {
-            if (!beforeMethodCallAfterTransform.before(methodCall)) {
-                continueFlag[0] = false;
-            }
-        }
+
         return methodCall;
     }
 
